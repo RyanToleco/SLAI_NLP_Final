@@ -1,8 +1,8 @@
 #!/bin/bash
 
 # ==========================================
-# Transformer模型训练脚本
-# 使用 train_100k.jsonl 数据集，训练100个epoch
+# RNN模型训练脚本
+# 使用 train_100k.jsonl 数据集，训练50个epoch
 # ==========================================
 
 set -e  # 遇到错误立即退出
@@ -75,17 +75,16 @@ fi
 echo "[INFO] 使用数据集: $DATA_FILE"
 
 # 训练参数
-MODEL_TYPE="transformer"
-EPOCHS=50
+MODEL_TYPE="rnn"
+EPOCHS=25
 BATCH_SIZE=64
 LEARNING_RATE=0.0005
-D_MODEL=512
-N_HEADS=8
-N_LAYERS=6
 MAX_LEN=50
-DECODE_METHOD="greedy"  # 可选: greedy 或 beam
+DECODE_METHOD="greedy"
 BEAM_WIDTH=5
 EVAL_SAMPLES=200
+ATTN_METHOD="concat"  # RNN注意力方法: dot, general, concat
+TF_RATIO=0.5  # Teacher Forcing比例 (0-1之间)
 
 # 显示训练配置
 echo "=========================================="
@@ -96,20 +95,18 @@ echo "数据集: $DATA_FILE"
 echo "训练轮数: $EPOCHS"
 echo "批次大小: $BATCH_SIZE"
 echo "学习率: $LEARNING_RATE"
-echo "模型维度: $D_MODEL"
-echo "注意力头数: $N_HEADS"
-echo "层数: $N_LAYERS"
 echo "最大长度: $MAX_LEN"
-echo "解码方法: $DECODE_METHOD"
-if [ "$DECODE_METHOD" == "beam" ]; then
-    echo "Beam宽度: $BEAM_WIDTH"
-fi
+echo "Beam宽度: $BEAM_WIDTH"
 echo "评估样本数: $EVAL_SAMPLES"
+echo "注意力方法: $ATTN_METHOD"
+echo "Teacher Forcing比例: $TF_RATIO"
+echo ""
+echo "注意：训练后将在test.jsonl上自动测试并生成可视化"
 echo "=========================================="
 echo ""
 
 # 开始训练
-echo "[INFO] 开始训练 Transformer 模型 ... $(date)"
+echo "[INFO] 开始训练 RNN 模型 ... $(date)"
 echo ""
 
 python inference.py \
@@ -118,15 +115,11 @@ python inference.py \
     --epochs $EPOCHS \
     --batch_size $BATCH_SIZE \
     --lr $LEARNING_RATE \
-    --d_model $D_MODEL \
-    --n_heads $N_HEADS \
-    --n_layers $N_LAYERS \
     --max_len $MAX_LEN \
-    --decode_method $DECODE_METHOD \
     --beam_width $BEAM_WIDTH \
     --eval_samples $EVAL_SAMPLES \
-    --norm_type layernorm \
-    --pos_type absolute
+    --attn_method $ATTN_METHOD \
+    --tf_ratio $TF_RATIO
 
 
 # 检查训练是否成功

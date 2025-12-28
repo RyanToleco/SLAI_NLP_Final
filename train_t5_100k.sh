@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ==========================================
-# Transformer模型训练脚本
+# T5模型训练脚本
 # 使用 train_100k.jsonl 数据集，训练100个epoch
 # ==========================================
 
@@ -75,7 +75,7 @@ fi
 echo "[INFO] 使用数据集: $DATA_FILE"
 
 # 训练参数
-MODEL_TYPE="transformer"
+MODEL_TYPE="t5"
 EPOCHS=50
 BATCH_SIZE=64
 LEARNING_RATE=0.0005

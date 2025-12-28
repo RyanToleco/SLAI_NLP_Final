@@ -13,6 +13,8 @@ import csv
 import logging
 from datetime import datetime
 from nltk.translate.bleu_score import sentence_bleu, SmoothingFunction, modified_precision
+import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
 
 # 导入自定义模块
 from preprocess import process_file, build_vocab, TranslationDataset, collate_fn
@@ -282,7 +284,249 @@ def log_training_summary(logger, model_type, training_history, total_time, confi
     logger.info("="*80)
 
 # ==========================================
-# 1. 核心评估函数：计算 BLEU-4 与 Precision_n
+# 1. 可视化函数
+# ==========================================
+
+def set_chinese_font():
+    """设置中文字体以支持中文显示"""
+    try:
+        # 尝试常见的中文字体
+        fonts = ['SimHei', 'Microsoft YaHei', 'WenQuanYi Micro Hei', 'PingFang SC']
+        for font in fonts:
+            try:
+                plt.rcParams['font.sans-serif'] = [font]
+                plt.rcParams['axes.unicode_minus'] = False
+                break
+            except:
+                continue
+    except:
+        pass
+
+def plot_training_metrics(csv_path, output_dir, model_type='Model'):
+    """
+    绘制训练过程的metrics折线图
+
+    Args:
+        csv_path: 训练统计CSV文件路径
+        output_dir: 输出目录
+        model_type: 模型类型名称
+    """
+    set_chinese_font()
+
+    # 读取CSV文件
+    if not os.path.exists(csv_path):
+        print(f"警告: CSV文件不存在: {csv_path}")
+        return
+
+    try:
+        # 读取CSV数据
+        epochs = []
+        losses = []
+        ppls = []
+        bleu1s = []
+        bleu2s = []
+        bleu3s = []
+        bleu4s = []
+        p1s = []
+        p2s = []
+        p3s = []
+        p4s = []
+
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                epochs.append(int(row['epoch']))
+                losses.append(float(row['loss']))
+                ppls.append(float(row['ppl']))
+                bleu1s.append(float(row['bleu1']))
+                bleu2s.append(float(row['bleu2']))
+                bleu3s.append(float(row['bleu3']))
+                bleu4s.append(float(row['bleu4']))
+                p1s.append(float(row['precision_1']))
+                p2s.append(float(row['precision_2']))
+                p3s.append(float(row['precision_3']))
+                p4s.append(float(row['precision_4']))
+
+        if not epochs:
+            print("警告: CSV文件中没有数据")
+            return
+
+        # 创建图表
+        fig = plt.figure(figsize=(20, 12))
+
+        # 子图1: Loss和Perplexity
+        ax1 = plt.subplot(2, 3, 1)
+        ax1.plot(epochs, losses, 'b-o', label='Loss', linewidth=2, markersize=6)
+        ax1.set_xlabel('Epoch', fontsize=12, fontweight='bold')
+        ax1.set_ylabel('Loss', fontsize=12, fontweight='bold')
+        ax1.set_title('Training Loss over Epochs', fontsize=14, fontweight='bold')
+        ax1.grid(True, alpha=0.3)
+        ax1.legend(loc='best', fontsize=10)
+
+        # 子图2: Perplexity
+        ax2 = plt.subplot(2, 3, 2)
+        # 过滤掉inf值以便绘图
+        valid_ppls = [p if p < 100 else 100 for p in ppls]
+        ax2.plot(epochs, valid_ppls, 'r-o', label='Perplexity', linewidth=2, markersize=6)
+        ax2.set_xlabel('Epoch', fontsize=12, fontweight='bold')
+        ax2.set_ylabel('Perplexity (capped at 100)', fontsize=12, fontweight='bold')
+        ax2.set_title('Perplexity over Epochs', fontsize=14, fontweight='bold')
+        ax2.grid(True, alpha=0.3)
+        ax2.legend(loc='best', fontsize=10)
+
+        # 子图3: BLEU Scores
+        ax3 = plt.subplot(2, 3, 3)
+        ax3.plot(epochs, bleu1s, 'c-o', label='BLEU-1', linewidth=2, markersize=6)
+        ax3.plot(epochs, bleu2s, 'm-o', label='BLEU-2', linewidth=2, markersize=6)
+        ax3.plot(epochs, bleu3s, 'y-o', label='BLEU-3', linewidth=2, markersize=6)
+        ax3.plot(epochs, bleu4s, 'g-o', label='BLEU-4', linewidth=2, markersize=6)
+        ax3.set_xlabel('Epoch', fontsize=12, fontweight='bold')
+        ax3.set_ylabel('BLEU Score', fontsize=12, fontweight='bold')
+        ax3.set_title('BLEU Scores over Epochs', fontsize=14, fontweight='bold')
+        ax3.grid(True, alpha=0.3)
+        ax3.legend(loc='best', fontsize=10)
+
+        # 子图4: Precision Scores
+        ax4 = plt.subplot(2, 3, 4)
+        ax4.plot(epochs, p1s, 'c-o', label='Precision-1', linewidth=2, markersize=6)
+        ax4.plot(epochs, p2s, 'm-o', label='Precision-2', linewidth=2, markersize=6)
+        ax4.plot(epochs, p3s, 'y-o', label='Precision-3', linewidth=2, markersize=6)
+        ax4.plot(epochs, p4s, 'g-o', label='Precision-4', linewidth=2, markersize=6)
+        ax4.set_xlabel('Epoch', fontsize=12, fontweight='bold')
+        ax4.set_ylabel('Precision', fontsize=12, fontweight='bold')
+        ax4.set_title('Precision Scores over Epochs', fontsize=14, fontweight='bold')
+        ax4.grid(True, alpha=0.3)
+        ax4.legend(loc='best', fontsize=10)
+
+        # 子图5: BLEU和Precision对比
+        ax5 = plt.subplot(2, 3, 5)
+        ax5.plot(epochs, bleu4s, 'g-o', label='BLEU-4', linewidth=2, markersize=6)
+        ax5.plot(epochs, p4s, 'r-s', label='Precision-4', linewidth=2, markersize=6)
+        ax5.set_xlabel('Epoch', fontsize=12, fontweight='bold')
+        ax5.set_ylabel('Score', fontsize=12, fontweight='bold')
+        ax5.set_title('BLEU-4 vs Precision-4', fontsize=14, fontweight='bold')
+        ax5.grid(True, alpha=0.3)
+        ax5.legend(loc='best', fontsize=10)
+
+        # 子图6: 综合指标
+        ax6 = plt.subplot(2, 3, 6)
+        # 归一化loss和perplexity以便在同一图表显示
+        norm_loss = np.array(losses)
+        norm_loss = (norm_loss - np.min(norm_loss)) / (np.max(norm_loss) - np.min(norm_loss) + 1e-8)
+
+        norm_bleu4 = np.array(bleu4s)
+        norm_bleu4 = (norm_bleu4 - np.min(norm_bleu4)) / (np.max(norm_bleu4) - np.min(norm_bleu4) + 1e-8)
+
+        ax6.plot(epochs, norm_loss, 'b-o', label='Normalized Loss', linewidth=2, markersize=6)
+        ax6.plot(epochs, norm_bleu4, 'g-s', label='Normalized BLEU-4', linewidth=2, markersize=6)
+        ax6.set_xlabel('Epoch', fontsize=12, fontweight='bold')
+        ax6.set_ylabel('Normalized Value [0, 1]', fontsize=12, fontweight='bold')
+        ax6.set_title('Normalized Loss vs BLEU-4', fontsize=14, fontweight='bold')
+        ax6.grid(True, alpha=0.3)
+        ax6.legend(loc='best', fontsize=10)
+
+        plt.suptitle(f'{model_type} Training Metrics', fontsize=16, fontweight='bold', y=0.995)
+        plt.tight_layout()
+
+        # 保存图表
+        plot_path = os.path.join(output_dir, 'training_metrics.png')
+        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+        print(f"训练曲线图已保存到: {plot_path}")
+        plt.close()
+
+    except Exception as e:
+        print(f"绘制训练曲线图时出错: {e}")
+        import traceback
+        traceback.print_exc()
+
+# ==========================================
+# 2. 测试函数
+# ==========================================
+
+def test_model_on_testset(model, test_src, test_tgt, src_vocab, tgt_vocab, tgt_itos,
+                         beam_width=5, max_len=50, decode_method=None, device=None, logger=None, output_dir=None):
+    """
+    在测试集上评估模型性能
+
+    Args:
+        model: 训练好的模型
+        test_src: 测试集源语言数据
+        test_tgt: 测试集目标语言数据
+        src_vocab: 源语言词表
+        tgt_vocab: 目标语言词表
+        tgt_itos: 目标语言索引到词的映射
+        beam_width: Beam Search宽度
+        max_len: 最大解码长度
+        decode_method: 解码方法 ('greedy' 或 'beam')
+        device: 计算设备
+        logger: 日志记录器
+        output_dir: 输出目录
+
+    Returns:
+        test_metrics: 测试集上的各项指标
+    """
+    if logger:
+        logger.info("\n" + "="*80)
+        logger.info("开始在测试集上评估模型")
+        logger.info("="*80)
+
+    # 创建测试数据集
+    test_ds = TranslationDataset(test_src, test_tgt, src_vocab, tgt_vocab)
+
+    # 使用全部测试样本进行评估
+    num_test_samples = len(test_ds)
+    if logger:
+        logger.info(f"测试集样本数: {num_test_samples}")
+
+    # 计算测试集指标
+    bleu_scores, precisions = calculate_metrics(
+        model, test_ds, tgt_itos,
+        beam_width=beam_width,
+        max_len=max_len,
+        num_samples=num_test_samples,
+        decode_method=decode_method,
+        logger=logger
+    )
+
+    # 整理测试结果
+    test_metrics = {
+        'test_samples': num_test_samples,
+        'bleu1': bleu_scores[1],
+        'bleu2': bleu_scores[2],
+        'bleu3': bleu_scores[3],
+        'bleu4': bleu_scores[4],
+        'precision_1': precisions[1],
+        'precision_2': precisions[2],
+        'precision_3': precisions[3],
+        'precision_4': precisions[4]
+    }
+
+    if logger:
+        logger.info("\n【测试集评估结果】")
+        logger.info(f"测试样本数: {num_test_samples}")
+        logger.info(f"BLEU-1: {bleu_scores[1]:.4f}")
+        logger.info(f"BLEU-2: {bleu_scores[2]:.4f}")
+        logger.info(f"BLEU-3: {bleu_scores[3]:.4f}")
+        logger.info(f"BLEU-4: {bleu_scores[4]:.4f}")
+        logger.info(f"Precision-1: {precisions[1]:.4f}")
+        logger.info(f"Precision-2: {precisions[2]:.4f}")
+        logger.info(f"Precision-3: {precisions[3]:.4f}")
+        logger.info(f"Precision-4: {precisions[4]:.4f}")
+        logger.info("="*80)
+
+    # 保存测试结果到JSON文件
+    if output_dir:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        test_results_file = f"{output_dir}/test_results_{timestamp}.json"
+        with open(test_results_file, 'w', encoding='utf-8') as f:
+            json.dump(test_metrics, f, indent=2, ensure_ascii=False)
+        if logger:
+            logger.info(f"测试结果已保存到: {test_results_file}")
+
+    return test_metrics
+
+# ==========================================
+# 3. 核心评估函数：计算 BLEU-4 与 Precision_n
 # ==========================================
 
 def calculate_metrics(model, dataset, tgt_itos, beam_width=5, num_samples=200, max_len=50, decode_method=None, logger=None):
@@ -527,6 +771,49 @@ def train_rnn_model(attn_method='concat', tf_ratio=0.5, n_epochs=10, batch_size=
     log_training_summary(logger, 'RNN', training_history, total_time, config)
     logger.info(f"\n训练完成！最佳BLEU-4: {best_bleu:.4f}")
 
+    # ==========================================
+    # 训练后：在测试集上评估和可视化
+    # ==========================================
+
+    logger.info("\n" + "="*80)
+    logger.info("开始测试集评估和可视化")
+    logger.info("="*80)
+
+    # 加载测试数据
+    logger.info("加载测试数据...")
+    test_src, test_tgt = process_file('dataset/test.jsonl', max_len=max_len)
+    logger.info(f"测试集样本数: {len(test_src)}")
+
+    # 在测试集上评估
+    test_metrics = test_model_on_testset(
+        model, test_src, test_tgt, src_vocab, tgt_vocab, tgt_itos,
+        beam_width=beam_width, max_len=max_len, decode_method=args.decode_method if hasattr(args, 'decode_method') else None,
+        device=DEVICE, logger=logger, output_dir=output_dir
+    )
+
+    # 绘制训练曲线
+    logger.info("\n生成训练过程可视化...")
+    stats_csv = f"{output_dir}/stats/training_stats.csv"
+    plot_training_metrics(stats_csv, output_dir, 'RNN')
+
+    # 更新结果文件，添加测试结果
+    results_file = f"{output_dir}/results.json"
+    if os.path.exists(results_file):
+        with open(results_file, 'r', encoding='utf-8') as f:
+            results = json.load(f)
+        results['test_metrics'] = test_metrics
+        results['model_for_test'] = 'rnn_best.pt'
+        with open(results_file, 'w', encoding='utf-8') as f:
+            json.dump(results, f, indent=2, ensure_ascii=False)
+        logger.info(f"更新结果文件，添加测试指标: {results_file}")
+
+    logger.info("="*80)
+    logger.info("所有任务完成！")
+    logger.info(f"最佳模型: {output_dir}/models/rnn_best.pt")
+    logger.info(f"训练曲线: {output_dir}/training_metrics.png")
+    logger.info(f"测试结果: {output_dir}/test_results_*.json")
+    logger.info("="*80)
+
 # ==========================================
 # 3. Transformer模型训练（从零开始）
 # ==========================================
@@ -685,7 +972,50 @@ def train_transformer_from_scratch(d_model=512, n_heads=8, n_layers=6, d_ff=2048
     # 记录训练汇总
     log_training_summary(logger, 'Transformer', training_history, total_time, config)
     logger.info(f"\n训练完成！最佳BLEU-4: {best_bleu:.4f}")
-    
+
+    # ==========================================
+    # 训练后：在测试集上评估和可视化
+    # ==========================================
+
+    logger.info("\n" + "="*80)
+    logger.info("开始测试集评估和可视化")
+    logger.info("="*80)
+
+    # 加载测试数据
+    logger.info("加载测试数据...")
+    test_src, test_tgt = process_file('dataset/test.jsonl', max_len=max_len)
+    logger.info(f"测试集样本数: {len(test_src)}")
+
+    # 在测试集上评估
+    test_metrics = test_model_on_testset(
+        model, test_src, test_tgt, src_vocab, tgt_vocab, tgt_itos,
+        beam_width=beam_width, max_len=max_len, decode_method=decode_method,
+        device=DEVICE, logger=logger, output_dir=output_dir
+    )
+
+    # 绘制训练曲线
+    logger.info("\n生成训练过程可视化...")
+    stats_csv = f"{output_dir}/stats/training_stats.csv"
+    plot_training_metrics(stats_csv, output_dir, 'Transformer')
+
+    # 更新结果文件，添加测试结果
+    results_file = f"{output_dir}/results.json"
+    if os.path.exists(results_file):
+        with open(results_file, 'r', encoding='utf-8') as f:
+            results = json.load(f)
+        results['test_metrics'] = test_metrics
+        results['model_for_test'] = 'transformer_best.pt'
+        with open(results_file, 'w', encoding='utf-8') as f:
+            json.dump(results, f, indent=2, ensure_ascii=False)
+        logger.info(f"更新结果文件，添加测试指标: {results_file}")
+
+    logger.info("="*80)
+    logger.info("所有任务完成！")
+    logger.info(f"最佳模型: {output_dir}/models/transformer_best.pt")
+    logger.info(f"训练曲线: {output_dir}/training_metrics.png")
+    logger.info(f"测试结果: {output_dir}/test_results_*.json")
+    logger.info("="*80)
+
     return model, best_bleu
 
 # ==========================================
@@ -1091,8 +1421,150 @@ def train_from_pretrained_t5(n_epochs=5, batch_size=32, lr=5e-5, src_itos=None, 
             log_training_summary(logger, 'T5 (Pretrained)', training_history, total_time, config)
         
         logger.info(f"\nT5微调最佳BLEU-4: {best_bleu:.4f}")
+
+        # ==========================================
+        # 训练后：在测试集上评估和可视化
+        # ==========================================
+
+        logger.info("\n" + "="*80)
+        logger.info("开始测试集评估和可视化")
+        logger.info("="*80)
+
+        # 加载测试数据
+        logger.info("加载测试数据...")
+        test_src, test_tgt = process_file('dataset/test.jsonl', max_len=128)
+        logger.info(f"测试集样本数: {len(test_src)}")
+
+        # 在测试集上评估T5模型
+        model.eval()
+        eval_samples = min(len(test_src), len(test_tgt))
+        smoothie = SmoothingFunction().method1
+
+        total_bleu_scores = {1: 0, 2: 0, 3: 0, 4: 0}
+        total_precisions = {1: 0, 2: 0, 3: 0, 4: 0}
+        valid_count = 0
+
+        logger.info(f"开始在测试集上评估T5模型，共{eval_samples}个样本...")
+
+        with torch.no_grad():
+            for i in range(eval_samples):
+                src_ids = test_src[i]
+                tgt_ids = test_tgt[i]
+
+                if src_itos is not None:
+                    src_text = ' '.join([src_itos.get(idx, '<UNK>') for idx in src_ids if idx not in [0, 1, 2]])
+                else:
+                    src_text = ' '.join([str(idx) for idx in src_ids if idx not in [0, 1, 2]])
+
+                input_text = f"translate Chinese to English: {src_text}"
+
+                try:
+                    input_ids = tokenizer.encode(input_text, return_tensors='pt', max_length=128, truncation=True).to(device)
+                    outputs = model.generate(input_ids, max_length=128, num_beams=5, early_stopping=True)
+                    pred_text = tokenizer.decode(outputs[0], skip_special_tokens=True)
+
+                    if tgt_itos is not None:
+                        ref_text = ' '.join([tgt_itos.get(idx, '<UNK>') for idx in tgt_ids if idx not in [0, 1, 2]])
+                    else:
+                        ref_text = ' '.join([str(idx) for idx in tgt_ids if idx not in [0, 1, 2]])
+
+                    pred_tokens = pred_text.split()
+                    ref_tokens = ref_text.split()
+
+                    if len(pred_tokens) > 0 and len(ref_tokens) > 0:
+                        # 计算BLEU-1到BLEU-4
+                        bleu1_score = sentence_bleu([ref_tokens], pred_tokens, weights=(1.0, 0, 0, 0),
+                                                   smoothing_function=smoothie)
+                        total_bleu_scores[1] += bleu1_score
+
+                        bleu2_score = sentence_bleu([ref_tokens], pred_tokens, weights=(0.5, 0.5, 0, 0),
+                                                   smoothing_function=smoothie)
+                        total_bleu_scores[2] += bleu2_score
+
+                        bleu3_score = sentence_bleu([ref_tokens], pred_tokens, weights=(0.33, 0.33, 0.33, 0),
+                                                   smoothing_function=smoothie)
+                        total_bleu_scores[3] += bleu3_score
+
+                        bleu4_score = sentence_bleu([ref_tokens], pred_tokens,
+                                                   weights=(0.25, 0.25, 0.25, 0.25),
+                                                   smoothing_function=smoothie)
+                        total_bleu_scores[4] += bleu4_score
+
+                        # 计算各阶Precision
+                        for n in range(1, 5):
+                            p_n = modified_precision([ref_tokens], pred_tokens, n)
+                            p_val = float(p_n.numerator) / p_n.denominator if p_n.denominator > 0 else 0
+                            total_precisions[n] += p_val
+
+                        valid_count += 1
+
+                        if (i + 1) % 50 == 0:
+                            logger.info(f"已评估 {i + 1}/{eval_samples} 个样本...")
+
+                except Exception as e:
+                    continue
+
+        if valid_count > 0:
+            bleu_scores = {n: total_bleu_scores[n] / valid_count for n in range(1, 5)}
+            precisions = {n: total_precisions[n] / valid_count for n in range(1, 5)}
+
+            test_metrics = {
+                'test_samples': valid_count,
+                'bleu1': bleu_scores[1],
+                'bleu2': bleu_scores[2],
+                'bleu3': bleu_scores[3],
+                'bleu4': bleu_scores[4],
+                'precision_1': precisions[1],
+                'precision_2': precisions[2],
+                'precision_3': precisions[3],
+                'precision_4': precisions[4]
+            }
+
+            logger.info("\n【T5测试集评估结果】")
+            logger.info(f"测试样本数: {valid_count}")
+            logger.info(f"BLEU-1: {bleu_scores[1]:.4f}")
+            logger.info(f"BLEU-2: {bleu_scores[2]:.4f}")
+            logger.info(f"BLEU-3: {bleu_scores[3]:.4f}")
+            logger.info(f"BLEU-4: {bleu_scores[4]:.4f}")
+            logger.info(f"Precision-1: {precisions[1]:.4f}")
+            logger.info(f"Precision-2: {precisions[2]:.4f}")
+            logger.info(f"Precision-3: {precisions[3]:.4f}")
+            logger.info(f"Precision-4: {precisions[4]:.4f}")
+
+            # 保存测试结果
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            test_results_file = f"{output_dir}/test_results_{timestamp}.json"
+            with open(test_results_file, 'w', encoding='utf-8') as f:
+                json.dump(test_metrics, f, indent=2, ensure_ascii=False)
+            logger.info(f"测试结果已保存到: {test_results_file}")
+
+            # 更新结果文件
+            results_file = f"{output_dir}/results.json"
+            if os.path.exists(results_file):
+                with open(results_file, 'r', encoding='utf-8') as f:
+                    results = json.load(f)
+                results['test_metrics'] = test_metrics
+                results['model_for_test'] = 't5_best.pt'
+                with open(results_file, 'w', encoding='utf-8') as f:
+                    json.dump(results, f, indent=2, ensure_ascii=False)
+                logger.info(f"更新结果文件，添加测试指标: {results_file}")
+
+            # 绘制训练曲线
+            logger.info("\n生成训练过程可视化...")
+            stats_csv = f"{output_dir}/stats/training_stats.csv"
+            plot_training_metrics(stats_csv, output_dir, 'T5 (Pretrained)')
+
+            logger.info("="*80)
+            logger.info("所有任务完成！")
+            logger.info(f"最佳模型: {output_dir}/models/t5_best.pt")
+            logger.info(f"训练曲线: {output_dir}/training_metrics.png")
+            logger.info(f"测试结果: {output_dir}/test_results_*.json")
+            logger.info("="*80)
+        else:
+            logger.warning("没有有效的测试样本可以评估")
+
         return model, best_bleu
-        
+
     except ImportError as e:
         if logger:
             logger.error(f"导入transformers库失败: {e}")
